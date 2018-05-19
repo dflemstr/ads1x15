@@ -110,11 +110,12 @@ impl<D> Ads1x15<D> {
 impl<D> Ads1x15<D>
 where
     D: i2cdev::core::I2CDevice,
+    D::Error: Send + Sync + 'static,
 {
     /// Reads the single-ended voltage of one of the input channels.
     ///
     /// The returned value is the electric potential in volts (V) measured on the specified channel.
-    pub fn read_single_ended(&mut self, channel: Channel) -> error::Result<f32, D> {
+    pub fn read_single_ended(&mut self, channel: Channel) -> error::Result<f32> {
         let mut config = reg::RegConfig::default();
         config.insert(self.gain.as_reg_config());
         config.insert(channel.as_reg_config_mux_single());
@@ -124,14 +125,18 @@ where
 
         self.device
             .smbus_write_word_data(reg::Register::Config.bits(), config.bits())
-            .map_err(|error| error::Error::I2C { error })?;
+            .map_err(|error| error::Error::I2C {
+                error: Box::new(error),
+            })?;
 
         // TODO(dflemstr): make this non-blocking, maybe using futures?
         thread::sleep(self.conversion_delay);
 
         let value = self.device
             .smbus_read_word_data(reg::Register::Convert.bits())
-            .map_err(|error| error::Error::I2C { error })?;
+            .map_err(|error| error::Error::I2C {
+                error: Box::new(error),
+            })?;
 
         let value = self.gain
             .convert_raw_voltage((value as i16) >> self.bit_shift);

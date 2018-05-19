@@ -12,10 +12,9 @@ where
     D: i2cdev::core::I2CDevice,
 {
     /// An error originating from the I2C bus.
-    #[fail(display = "I2C error: {}", cause)]
+    #[fail(display = "I2C error: {}", error)]
     I2C {
         /// The underlying I2C error cause.
-        #[cause]
-        cause: D::Error,
+        error: D::Error,
     },
 }

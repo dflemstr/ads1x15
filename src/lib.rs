@@ -124,14 +124,14 @@ where
 
         self.device
             .smbus_write_word_data(reg::Register::Config.bits(), config.bits())
-            .map_err(|cause| error::Error::I2C { cause })?;
+            .map_err(|error| error::Error::I2C { error })?;
 
         // TODO(dflemstr): make this non-blocking, maybe using futures?
         thread::sleep(self.conversion_delay);
 
         let value = self.device
             .smbus_read_word_data(reg::Register::Convert.bits())
-            .map_err(|cause| error::Error::I2C { cause })?;
+            .map_err(|error| error::Error::I2C { error })?;
 
         let value = self.gain
             .convert_raw_voltage((value as i16) >> self.bit_shift);

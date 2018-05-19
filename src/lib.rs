@@ -24,9 +24,14 @@ pub mod reg;
 #[derive(Debug)]
 pub struct Ads1x15<D> {
     device: D,
-    conversion_delay: time::Duration,
-    bit_shift: usize,
     gain: Gain,
+    model: Model,
+}
+
+#[derive(Debug)]
+enum Model {
+    ADS1015,
+    ADS1115,
 }
 
 /// A channel on the ADS1x15 that contains an analog electric signal.
@@ -69,14 +74,12 @@ impl<D> Ads1x15<D> {
     /// Uses the supplied I2C device.
     pub fn new_ads1015(device: D) -> Self {
         let gain = Gain::Within6_144V;
-        let conversion_delay = time::Duration::from_millis(1);
-        let bit_shift = 4;
+        let model = Model::ADS1015;
 
         Ads1x15 {
             device,
-            conversion_delay,
-            bit_shift,
             gain,
+            model,
         }
     }
 
@@ -85,14 +88,12 @@ impl<D> Ads1x15<D> {
     /// Uses the supplied I2C device.
     pub fn new_ads1115(device: D) -> Self {
         let gain = Gain::Within6_144V;
-        let conversion_delay = time::Duration::from_millis(8);
-        let bit_shift = 0;
+        let model = Model::ADS1115;
 
         Ads1x15 {
             device,
-            conversion_delay,
-            bit_shift,
             gain,
+            model,
         }
     }
 
@@ -130,7 +131,7 @@ where
             })?;
 
         // TODO(dflemstr): make this non-blocking, maybe using futures?
-        thread::sleep(self.conversion_delay);
+        thread::sleep(self.model.conversion_delay());
 
         let value = self.device
             .smbus_read_word_data(reg::Register::Convert.bits())
@@ -138,8 +139,7 @@ where
                 error: Box::new(error),
             })?;
 
-        let value = self.gain
-            .convert_raw_voltage((value as i16) >> self.bit_shift);
+        let value = self.model.convert_raw_voltage(self.gain, value as i16);
 
         Ok(value)
     }
@@ -170,17 +170,40 @@ impl Gain {
             Gain::Within0_256V => reg::RegConfig::Pga_0_256V,
         }
     }
+}
 
-    /// Converts a raw reading from the device into a voltage matching this gain value.
-    pub fn convert_raw_voltage(&self, value: i16) -> f32 {
-        let value = value as f32;
+impl Model {
+    fn conversion_delay(&self) -> time::Duration {
         match *self {
-            Gain::Within6_144V => value * 1.8750e-1,
-            Gain::Within4_096V => value * 1.2500e-1,
-            Gain::Within2_048V => value * 6.2500e-2,
-            Gain::Within1_024V => value * 3.1250e-2,
-            Gain::Within0_512V => value * 1.5625e-2,
-            Gain::Within0_256V => value * 7.8125e-3,
+            Model::ADS1015 => time::Duration::from_millis(1),
+            Model::ADS1115 => time::Duration::from_millis(8),
+        }
+    }
+
+    fn convert_raw_voltage(&self, gain: Gain, value: i16) -> f32 {
+        match *self {
+            Model::ADS1015 => {
+                let value = (value >> 4) as f32;
+                match gain {
+                    Gain::Within6_144V => value * 3.0000e-3,
+                    Gain::Within4_096V => value * 2.0000e-3,
+                    Gain::Within2_048V => value * 1.0000e-3,
+                    Gain::Within1_024V => value * 5.0000e-4,
+                    Gain::Within0_512V => value * 2.5000e-4,
+                    Gain::Within0_256V => value * 1.2500e-4,
+                }
+            }
+            Model::ADS1115 => {
+                let value = value as f32;
+                match gain {
+                    Gain::Within6_144V => value * 1.8750e-4,
+                    Gain::Within4_096V => value * 1.2500e-4,
+                    Gain::Within2_048V => value * 6.2500e-5,
+                    Gain::Within1_024V => value * 3.1250e-5,
+                    Gain::Within0_512V => value * 1.5625e-5,
+                    Gain::Within0_256V => value * 7.8125e-6,
+                }
+            }
         }
     }
 }

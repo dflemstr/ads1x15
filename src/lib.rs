@@ -5,8 +5,8 @@
 //!   - <http://www.ti.com/lit/ds/symlink/ads1015.pdf>
 //!   - <http://www.ti.com/lit/ds/symlink/ads1115.pdf>
 #![deny(missing_docs, missing_debug_implementations, missing_copy_implementations, trivial_casts,
-trivial_numeric_casts, unsafe_code, unstable_features, unused_import_braces,
-unused_qualifications)]
+        trivial_numeric_casts, unsafe_code, unstable_features, unused_import_braces,
+        unused_qualifications)]
 
 #[macro_use]
 extern crate bitflags;
@@ -72,7 +72,12 @@ impl<D> Ads1x15<D> {
         let conversion_delay = time::Duration::from_millis(1);
         let bit_shift = 4;
 
-        Ads1x15 { device, conversion_delay, bit_shift, gain }
+        Ads1x15 {
+            device,
+            conversion_delay,
+            bit_shift,
+            gain,
+        }
     }
 
     /// Create a new interface to an ADS1115 device.
@@ -83,7 +88,12 @@ impl<D> Ads1x15<D> {
         let conversion_delay = time::Duration::from_millis(8);
         let bit_shift = 0;
 
-        Ads1x15 { device, conversion_delay, bit_shift, gain }
+        Ads1x15 {
+            device,
+            conversion_delay,
+            bit_shift,
+            gain,
+        }
     }
 
     /// Returns the current gain setting of the device.
@@ -97,7 +107,10 @@ impl<D> Ads1x15<D> {
     }
 }
 
-impl<D> Ads1x15<D> where D: i2cdev::core::I2CDevice {
+impl<D> Ads1x15<D>
+where
+    D: i2cdev::core::I2CDevice,
+{
     /// Reads the single-ended voltage of one of the input channels.
     ///
     /// The returned value is the electric potential in volts (V) measured on the specified channel.
@@ -109,14 +122,19 @@ impl<D> Ads1x15<D> where D: i2cdev::core::I2CDevice {
         // Set 'start single-conversion' bit
         config.insert(reg::RegConfig::OsSingle);
 
-        self.device.smbus_write_word_data(reg::Register::Config.bits(), config.bits()).map_err(|cause| error::Error::I2C { cause })?;
+        self.device
+            .smbus_write_word_data(reg::Register::Config.bits(), config.bits())
+            .map_err(|cause| error::Error::I2C { cause })?;
 
         // TODO(dflemstr): make this non-blocking, maybe using futures?
         thread::sleep(self.conversion_delay);
 
-        let value = self.device.smbus_read_word_data(reg::Register::Convert.bits()).map_err(|cause| error::Error::I2C { cause })?;
+        let value = self.device
+            .smbus_read_word_data(reg::Register::Convert.bits())
+            .map_err(|cause| error::Error::I2C { cause })?;
 
-        let value = self.gain.convert_raw_voltage((value as i16) >> self.bit_shift);
+        let value = self.gain
+            .convert_raw_voltage((value as i16) >> self.bit_shift);
 
         Ok(value)
     }

@@ -10,6 +10,7 @@ authors = ["David Flemström <david.flemstrom@gmail.com>"]
 
 [dependencies]
 i2cdev = "0.4.0"
-bitflags = "1.0.3"
 failure = "0.1.1"
+bitfield-register = "0.2.1"
+bitfield-register-macro = "0.2.1"
 byteorder = "1.2.3"

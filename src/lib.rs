@@ -4,12 +4,14 @@
 //!
 //!   - <http://www.ti.com/lit/ds/symlink/ads1015.pdf>
 //!   - <http://www.ti.com/lit/ds/symlink/ads1115.pdf>
-#![deny(missing_docs, missing_debug_implementations, missing_copy_implementations, trivial_casts,
-        trivial_numeric_casts, unsafe_code, unstable_features, unused_import_braces,
-        unused_qualifications)]
+#![deny(
+    missing_docs, missing_debug_implementations, missing_copy_implementations, trivial_casts,
+    trivial_numeric_casts, unused_import_braces, unused_qualifications
+)]
+#![feature(proc_macro)]
 
-#[macro_use]
-extern crate bitflags;
+extern crate bitfield_register;
+extern crate bitfield_register_macro;
 extern crate byteorder;
 #[macro_use]
 extern crate failure;
@@ -117,22 +119,26 @@ where
     fn read_single_ended_impl(&mut self, channel: Channel) -> Result<f32, D::Error> {
         use byteorder::ByteOrder;
 
-        let mut config = reg::RegConfig::default();
-        config.insert(self.gain.as_reg_config());
-        config.insert(channel.as_reg_config_mux_single());
+        let mut config = reg::Config::default();
+        config.set_os(reg::ConfigOs::Single);
+        config.set_mux(channel.as_reg_config_mux_single());
+        config.set_pga(self.gain.as_reg_config_pga());
+        config.set_mode(reg::ConfigMode::Single);
+        config.set_dr(reg::ConfigDr::_3300SPS);
+        config.set_cmode(reg::ConfigCmode::Trad);
+        config.set_cpol(reg::ConfigCpol::Actvlow);
+        config.set_clat(reg::ConfigClat::Nonlat);
+        config.set_cque(reg::ConfigCque::None);
 
-        // Set 'start single-conversion' bit
-        config.insert(reg::RegConfig::OsSingle);
-
-        let mut write_buf = [reg::Register::Config.bits(), 0u8, 0u8];
-        byteorder::LittleEndian::write_u16(&mut write_buf[1..], config.bits());
+        let mut write_buf = [reg::Register::Config as u8, 0u8, 0u8];
+        byteorder::LittleEndian::write_u16(&mut write_buf[1..], config.into());
         self.device.write(&write_buf)?;
 
         // TODO(dflemstr): make this non-blocking, maybe using futures?
         thread::sleep(self.model.conversion_delay());
 
         let mut read_buf = [0u8, 0u8];
-        self.device.smbus_write_byte(reg::Register::Convert.bits())?;
+        self.device.smbus_write_byte(reg::Register::Convert as u8)?;
         self.device.read(&mut read_buf)?;
         let value = self.model
             .convert_raw_voltage(self.gain, byteorder::BigEndian::read_i16(&read_buf));
@@ -154,26 +160,26 @@ where
 impl Channel {
     /// Converts this channel value into a valid value for the I2C `Config` register, setting the
     /// mux to single-ended measurements for that channel.
-    pub fn as_reg_config_mux_single(&self) -> reg::RegConfig {
+    pub fn as_reg_config_mux_single(&self) -> reg::ConfigMux {
         match *self {
-            Channel::A0 => reg::RegConfig::MuxSingle0,
-            Channel::A1 => reg::RegConfig::MuxSingle1,
-            Channel::A2 => reg::RegConfig::MuxSingle2,
-            Channel::A3 => reg::RegConfig::MuxSingle3,
+            Channel::A0 => reg::ConfigMux::Single0,
+            Channel::A1 => reg::ConfigMux::Single1,
+            Channel::A2 => reg::ConfigMux::Single2,
+            Channel::A3 => reg::ConfigMux::Single3,
         }
     }
 }
 
 impl Gain {
     /// Converts this gain value into a valid value for the I2C `Config` register.
-    pub fn as_reg_config(&self) -> reg::RegConfig {
+    pub fn as_reg_config_pga(&self) -> reg::ConfigPga {
         match *self {
-            Gain::Within6_144V => reg::RegConfig::Pga_6_144V,
-            Gain::Within4_096V => reg::RegConfig::Pga_4_096V,
-            Gain::Within2_048V => reg::RegConfig::Pga_2_048V,
-            Gain::Within1_024V => reg::RegConfig::Pga_1_024V,
-            Gain::Within0_512V => reg::RegConfig::Pga_0_512V,
-            Gain::Within0_256V => reg::RegConfig::Pga_0_256V,
+            Gain::Within6_144V => reg::ConfigPga::_6_144V,
+            Gain::Within4_096V => reg::ConfigPga::_4_096V,
+            Gain::Within2_048V => reg::ConfigPga::_2_048V,
+            Gain::Within1_024V => reg::ConfigPga::_1_024V,
+            Gain::Within0_512V => reg::ConfigPga::_0_512V,
+            Gain::Within0_256V => reg::ConfigPga::_0_256V,
         }
     }
 }

@@ -14,8 +14,6 @@
 extern crate bitfield_register;
 extern crate bitfield_register_macro;
 extern crate byteorder;
-#[macro_use]
-extern crate failure;
 extern crate futures_await as futures;
 extern crate i2cdev;
 extern crate qutex;
@@ -121,14 +119,12 @@ impl<D> Ads1x15<D> {
 impl<D> Ads1x15<D>
 where
     D: i2cdev::core::I2CDevice + 'static,
-    D::Error: Send + Sync + 'static,
 {
     #[async]
-    fn read_single_ended_impl(device: qutex::Qutex<D>, gain: Gain, model: Model, channel: Channel) -> Result<f32, D::Error> {
+    fn read_single_ended_impl(device: qutex::Qutex<D>, gain: Gain, model: Model, channel: Channel) -> Result<f32, error::Error<D>> {
         use byteorder::ByteOrder;
 
-        // TODO: handle this error
-        let mut device = await!(device.lock()).unwrap();
+        let mut device = await!(device.lock()).map_err(error::Error::Canceled::<D>)?;
 
         let mut config = reg::Config::default();
         config.set_os(reg::ConfigOs::Single);
@@ -143,14 +139,13 @@ where
 
         let mut write_buf = [reg::Register::Config as u8, 0u8, 0u8];
         byteorder::LittleEndian::write_u16(&mut write_buf[1..], config.into());
-        device.write(&write_buf)?;
+        device.write(&write_buf).map_err(error::Error::I2C)?;
 
-        // TODO: handle this error
-        await!(tokio_timer::sleep(model.conversion_delay())).unwrap();
+        await!(tokio_timer::sleep(model.conversion_delay())).map_err(error::Error::Timer::<D>)?;
 
         let mut read_buf = [0u8, 0u8];
-        device.smbus_write_byte(reg::Register::Convert as u8)?;
-        device.read(&mut read_buf)?;
+        device.smbus_write_byte(reg::Register::Convert as u8).map_err(error::Error::I2C)?;
+        device.read(&mut read_buf).map_err(error::Error::I2C)?;
         let value = model
             .convert_raw_voltage(gain, byteorder::BigEndian::read_i16(&read_buf));
 
@@ -160,11 +155,8 @@ where
     /// Reads the single-ended voltage of one of the input channels.
     ///
     /// The returned value is the electric potential in volts (V) measured on the specified channel.
-    pub fn read_single_ended(&mut self, channel: Channel) -> impl Future<Item=f32, Error=error::Error> {
+    pub fn read_single_ended(&mut self, channel: Channel) -> impl Future<Item=f32, Error=error::Error<D>> {
         Ads1x15::read_single_ended_impl(self.device.clone(), self.gain, self.model, channel)
-            .map_err(|error| error::Error::I2C {
-                error: Box::new(error),
-            })
     }
 }
 

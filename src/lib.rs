@@ -9,15 +9,20 @@
     trivial_numeric_casts, unused_import_braces, unused_qualifications
 )]
 #![feature(proc_macro)]
+#![feature(generators)]
 
 extern crate bitfield_register;
 extern crate bitfield_register_macro;
 extern crate byteorder;
 #[macro_use]
 extern crate failure;
+extern crate futures_await as futures;
 extern crate i2cdev;
+extern crate qutex;
+extern crate tokio_timer;
 
-use std::thread;
+use futures::prelude::*;
+
 use std::time;
 
 pub mod error;
@@ -26,12 +31,12 @@ pub mod reg;
 /// An interface to an ADS1x15 device that can be used to control the device over I2C.
 #[derive(Debug)]
 pub struct Ads1x15<D> {
-    device: D,
+    device: qutex::Qutex<D>,
     gain: Gain,
     model: Model,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 enum Model {
     ADS1015,
     ADS1115,
@@ -76,6 +81,7 @@ impl<D> Ads1x15<D> {
     ///
     /// Uses the supplied I2C device.
     pub fn new_ads1015(device: D) -> Self {
+        let device = qutex::Qutex::new(device);
         let gain = Gain::Within6_144V;
         let model = Model::ADS1015;
 
@@ -90,6 +96,7 @@ impl<D> Ads1x15<D> {
     ///
     /// Uses the supplied I2C device.
     pub fn new_ads1115(device: D) -> Self {
+        let device = qutex::Qutex::new(device);
         let gain = Gain::Within6_144V;
         let model = Model::ADS1115;
 
@@ -113,16 +120,20 @@ impl<D> Ads1x15<D> {
 
 impl<D> Ads1x15<D>
 where
-    D: i2cdev::core::I2CDevice,
+    D: i2cdev::core::I2CDevice + 'static,
     D::Error: Send + Sync + 'static,
 {
-    fn read_single_ended_impl(&mut self, channel: Channel) -> Result<f32, D::Error> {
+    #[async]
+    fn read_single_ended_impl(device: qutex::Qutex<D>, gain: Gain, model: Model, channel: Channel) -> Result<f32, D::Error> {
         use byteorder::ByteOrder;
+
+        // TODO: handle this error
+        let mut device = await!(device.lock()).unwrap();
 
         let mut config = reg::Config::default();
         config.set_os(reg::ConfigOs::Single);
         config.set_mux(channel.as_reg_config_mux_single());
-        config.set_pga(self.gain.as_reg_config_pga());
+        config.set_pga(gain.as_reg_config_pga());
         config.set_mode(reg::ConfigMode::Single);
         config.set_dr(reg::ConfigDr::_3300SPS);
         config.set_cmode(reg::ConfigCmode::Trad);
@@ -132,16 +143,16 @@ where
 
         let mut write_buf = [reg::Register::Config as u8, 0u8, 0u8];
         byteorder::LittleEndian::write_u16(&mut write_buf[1..], config.into());
-        self.device.write(&write_buf)?;
+        device.write(&write_buf)?;
 
-        // TODO(dflemstr): make this non-blocking, maybe using futures?
-        thread::sleep(self.model.conversion_delay());
+        // TODO: handle this error
+        await!(tokio_timer::sleep(model.conversion_delay())).unwrap();
 
         let mut read_buf = [0u8, 0u8];
-        self.device.smbus_write_byte(reg::Register::Convert as u8)?;
-        self.device.read(&mut read_buf)?;
-        let value = self.model
-            .convert_raw_voltage(self.gain, byteorder::BigEndian::read_i16(&read_buf));
+        device.smbus_write_byte(reg::Register::Convert as u8)?;
+        device.read(&mut read_buf)?;
+        let value = model
+            .convert_raw_voltage(gain, byteorder::BigEndian::read_i16(&read_buf));
 
         Ok(value)
     }
@@ -149,8 +160,8 @@ where
     /// Reads the single-ended voltage of one of the input channels.
     ///
     /// The returned value is the electric potential in volts (V) measured on the specified channel.
-    pub fn read_single_ended(&mut self, channel: Channel) -> error::Result<f32> {
-        self.read_single_ended_impl(channel)
+    pub fn read_single_ended(&mut self, channel: Channel) -> impl Future<Item=f32, Error=error::Error> {
+        Ads1x15::read_single_ended_impl(self.device.clone(), self.gain, self.model, channel)
             .map_err(|error| error::Error::I2C {
                 error: Box::new(error),
             })

@@ -14,3 +14,9 @@ failure = "0.1.1"
 bitfield-register = "0.2.1"
 bitfield-register-macro = "0.2.1"
 byteorder = "1.2.3"
+qutex = "0.2.1"
+futures-await = "0.1.1"
+tokio-timer = "0.2.4"
+
+[dev-dependencies]
+tokio = "0.1.7"

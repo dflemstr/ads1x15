@@ -19,3 +19,4 @@ tokio-timer = "0.2.4"
 
 [dev-dependencies]
 tokio = "0.1.7"
+failure = "0.1.1"

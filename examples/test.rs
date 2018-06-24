@@ -8,11 +8,14 @@ extern crate i2cdev;
 extern crate tokio;
 extern crate tokio_timer;
 
-use futures::prelude::*;
+use futures::prelude::async;
+use futures::prelude::await;
 
 use std::time;
 
 fn main() -> Result<(), failure::Error> {
+    use futures::Future;
+
     let dev = i2cdev::linux::LinuxI2CDevice::new("/dev/i2c-1", 0x48)?;
     let dac = ads1x15::Ads1x15::new_ads1115(dev);
 

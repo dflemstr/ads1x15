@@ -19,7 +19,8 @@ extern crate i2cdev;
 extern crate qutex;
 extern crate tokio_timer;
 
-use futures::prelude::*;
+use futures::prelude::async;
+use futures::prelude::await;
 
 use std::time;
 
@@ -121,7 +122,12 @@ where
     D: i2cdev::core::I2CDevice + 'static,
 {
     #[async]
-    fn read_single_ended_impl(device: qutex::Qutex<D>, gain: Gain, model: Model, channel: Channel) -> Result<f32, error::Error<D>> {
+    fn read_single_ended_impl(
+        device: qutex::Qutex<D>,
+        gain: Gain,
+        model: Model,
+        channel: Channel,
+    ) -> Result<f32, error::Error<D>> {
         use byteorder::ByteOrder;
 
         let mut device = await!(device.lock()).map_err(error::Error::Canceled::<D>)?;
@@ -144,10 +150,11 @@ where
         await!(tokio_timer::sleep(model.conversion_delay())).map_err(error::Error::Timer::<D>)?;
 
         let mut read_buf = [0u8, 0u8];
-        device.smbus_write_byte(reg::Register::Convert as u8).map_err(error::Error::I2C)?;
+        device
+            .smbus_write_byte(reg::Register::Convert as u8)
+            .map_err(error::Error::I2C)?;
         device.read(&mut read_buf).map_err(error::Error::I2C)?;
-        let value = model
-            .convert_raw_voltage(gain, byteorder::BigEndian::read_i16(&read_buf));
+        let value = model.convert_raw_voltage(gain, byteorder::BigEndian::read_i16(&read_buf));
 
         Ok(value)
     }
@@ -155,7 +162,10 @@ where
     /// Reads the single-ended voltage of one of the input channels.
     ///
     /// The returned value is the electric potential in volts (V) measured on the specified channel.
-    pub fn read_single_ended(&mut self, channel: Channel) -> impl Future<Item=f32, Error=error::Error<D>> {
+    pub fn read_single_ended(
+        &mut self,
+        channel: Channel,
+    ) -> impl futures::Future<Item = f32, Error = error::Error<D>> {
         Ads1x15::read_single_ended_impl(self.device.clone(), self.gain, self.model, channel)
     }
 }

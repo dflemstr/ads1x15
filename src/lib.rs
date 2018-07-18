@@ -8,8 +8,8 @@
     missing_docs, missing_debug_implementations, missing_copy_implementations, trivial_casts,
     trivial_numeric_casts, unused_import_braces, unused_qualifications
 )]
-#![feature(proc_macro)]
 #![feature(generators)]
+#![feature(use_extern_macros)]
 
 extern crate bitfield_register;
 extern crate bitfield_register_macro;

@@ -4,7 +4,7 @@ description = "I2C driver for the Texas Instruments ADS1015/ADS1115 ADC"
 repository = "https://github.com/dflemstr/ads1x15"
 keywords = ["i2c", "adc", "ads1015", "ads1115", "analog"]
 categories = ["embedded", "hardware-support"]
-version = "0.5.0"
+version = "0.5.1-alpha.0"
 license = "MIT"
 authors = ["David Flemström <david.flemstrom@gmail.com>"]
 

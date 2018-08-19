@@ -1,4 +1,3 @@
-#![feature(proc_macro)]
 #![feature(generators)]
 
 extern crate ads1x15;

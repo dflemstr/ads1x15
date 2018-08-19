@@ -23,7 +23,7 @@ fn main() -> Result<(), failure::Error> {
 }
 
 #[async]
-fn run(mut dac: ads1x15::Ads1x15<i2cdev::linux::LinuxI2CDevice>) -> Result<(), failure::Error> {
+fn run(dac: ads1x15::Ads1x15<i2cdev::linux::LinuxI2CDevice>) -> Result<(), failure::Error> {
     loop {
         let a0 = await!(dac.read_single_ended(ads1x15::Channel::A0))?;
         let a1 = await!(dac.read_single_ended(ads1x15::Channel::A1))?;

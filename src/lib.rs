@@ -162,7 +162,7 @@ where
     ///
     /// The returned value is the electric potential in volts (V) measured on the specified channel.
     pub fn read_single_ended(
-        &mut self,
+        &self,
         channel: Channel,
     ) -> impl futures::Future<Item = f32, Error = error::Error<D>> {
         Ads1x15::read_single_ended_impl(self.device.clone(), self.gain, self.model, channel)
